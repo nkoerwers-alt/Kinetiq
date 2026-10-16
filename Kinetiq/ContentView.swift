@@ -4,58 +4,62 @@ import SwiftUI
 struct ContentView: View {
     @State private var isPlaying = false
     @State private var selectedTool = "Select"
-    @State private var selectedClip = "Main Video"
-    @State private var playhead: CGFloat = 0.28
+    @State private var selectedTrack = "Main Video"
+    @State private var playhead: Double = 0.25
+    @State private var zoom: Double = 1
 
-    private let background = Color(red: 0.035, green: 0.04, blue: 0.05)
-    private let panel = Color(red: 0.075, green: 0.08, blue: 0.095)
-    private let accent = Color(red: 0.38, green: 0.75, blue: 1.0)
+    private let background = Color(red: 0.035, green: 0.035, blue: 0.045)
+    private let panel = Color(red: 0.075, green: 0.075, blue: 0.09)
+    private let accent = Color(red: 0.35, green: 0.72, blue: 1)
+
+    private let tools: [(String, String)] = [
+        ("Select", "cursorarrow"),
+        ("Cut", "scissors"),
+        ("Audio", "waveform"),
+        ("Text", "textformat"),
+        ("Effects", "sparkles"),
+        ("Speed", "speedometer"),
+        ("Media", "photo.on.rectangle")
+    ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        GeometryReader { geometry in
+            let compact = geometry.size.width < 700
 
-            Divider().overlay(.white.opacity(0.08))
+            VStack(spacing: 0) {
+                header
 
-            HStack(spacing: 0) {
-                toolRail
+                Divider().overlay(.white.opacity(0.08))
 
-                VStack(spacing: 12) {
-                    previewPanel
-                    timelinePanel
+                if compact {
+                    compactEditor
+                } else {
+                    desktopEditor
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                inspector
+                Divider().overlay(.white.opacity(0.08))
+                timeline
             }
+            .background(background)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(background)
-        .foregroundStyle(.white)
         .preferredColorScheme(.dark)
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            Text("K")
-                .font(.system(size: 23, weight: .black))
+        HStack(spacing: 12) {
+            Image(systemName: "square.stack.3d.up.fill")
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(accent)
 
             Text("KINETIQ")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: .rounded))
                 .tracking(2)
 
-            Rectangle()
-                .fill(.white.opacity(0.12))
-                .frame(width: 1, height: 24)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Untitled Project")
-                    .font(.system(size: 13, weight: .medium))
-                Text("Saved locally")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.45))
-            }
+            Text("EDITOR")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.4))
 
             Spacer()
 
@@ -69,8 +73,8 @@ struct ContentView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(accent, in: RoundedRectangle(cornerRadius: 7))
-                .foregroundStyle(.black)
+                .background(accent.opacity(0.2))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
 
@@ -78,142 +82,168 @@ struct ContentView: View {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 16, weight: .medium))
                     .frame(width: 36, height: 36)
-                    .background(panel, in: RoundedRectangle(cornerRadius: 7))
+                    .background(panel)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Export project")
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
 
-    private var toolRail: some View {
-        VStack(spacing: 7) {
-            toolButton("Select", icon: "cursorarrow")
-            toolButton("Cut", icon: "scissors")
-            toolButton("Audio", icon: "waveform")
-            toolButton("Text", icon: "textformat")
-            toolButton("Effects", icon: "sparkles")
-            toolButton("Speed", icon: "speedometer")
-
-            Spacer()
-
-            toolButton("Media", icon: "film")
-        }
-        .padding(9)
-        .frame(width: 66)
-        .background(panel.opacity(0.7))
-    }
-
-    private func toolButton(_ name: String, icon: String) -> some View {
-        Button {
-            selectedTool = name
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 17))
-                Text(name)
-                    .font(.system(size: 9, weight: .medium))
-            }
-            .foregroundStyle(selectedTool == name ? accent : .white.opacity(0.55))
-            .frame(width: 52, height: 53)
-            .background {
-                if selectedTool == name {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(accent.opacity(0.12))
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var previewPanel: some View {
+    private var compactEditor: some View {
         VStack(spacing: 12) {
-            HStack {
-                Text("VIEWER")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1.5)
-                    .foregroundStyle(.white.opacity(0.45))
+            PreviewPlaceholder(isPlaying: isPlaying)
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(tools, id: \.0) { tool in
+                        Button {
+                            selectedTool = tool.0
+                        } label: {
+                            VStack(spacing: 6) {
+                                Image(systemName: tool.1)
+                                Text(tool.0)
+                                    .font(.system(size: 10))
+                            }
+                            .foregroundStyle(
+                                selectedTool == tool.0 ? accent : .white.opacity(0.65)
+                            )
+                            .frame(width: 62, height: 58)
+                            .background(
+                                selectedTool == tool.0
+                                    ? accent.opacity(0.12) : panel
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+
+            inspector
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var desktopEditor: some View {
+        HStack(spacing: 0) {
+            VStack(spacing: 4) {
+                ForEach(tools, id: \.0) { tool in
+                    EditorToolButton(
+                        title: tool.0,
+                        symbol: tool.1,
+                        isSelected: selectedTool == tool.0
+                    ) {
+                        selectedTool = tool.0
+                    }
+                }
 
                 Spacer()
-
-                Text("16:9")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.5))
             }
+            .frame(width: 82)
+            .padding(.top, 12)
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.12, green: 0.19, blue: 0.25),
-                                Color(red: 0.035, green: 0.05, blue: 0.075),
-                                Color(red: 0.16, green: 0.13, blue: 0.12)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+            Divider().overlay(.white.opacity(0.08))
 
-                VStack(spacing: 8) {
-                    Image(systemName: "play.rectangle")
-                        .font(.system(size: 38, weight: .ultraLight))
+            VStack(spacing: 12) {
+                PreviewPlaceholder(isPlaying: isPlaying)
+                    .frame(maxWidth: 760)
+
+                HStack {
+                    Text("00:\(String(format: "%02d", Int(playhead * 60)))")
+                        .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.65))
 
-                    Text("Your preview")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.8))
+                    Spacer()
 
-                    Text("Import a video to get started")
+                    Text("16:9  •  1080p")
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.white.opacity(0.4))
                 }
+                .frame(maxWidth: 760)
             }
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .frame(maxWidth: 680)
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            HStack(spacing: 18) {
-                Image(systemName: "backward.end.fill")
+            Divider().overlay(.white.opacity(0.08))
 
-                Button {
-                    isPlaying.toggle()
-                } label: {
-                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 17))
-                        .foregroundStyle(accent)
-                }
-                .buttonStyle(.plain)
-
-                Image(systemName: "forward.end.fill")
-
-                Text("00:00:00")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.7))
-
-                Spacer()
-
-                Image(systemName: "speaker.wave.2")
-                Image(systemName: "gearshape")
-            }
-            .font(.system(size: 13))
-            .foregroundStyle(.white.opacity(0.65))
+            inspector
+                .frame(width: 220)
         }
-        .padding(14)
-        .background(panel, in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private var timelinePanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var inspector: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(selectedTool == "Select" ? "Inspector" : selectedTool.uppercased())
+                .font(.system(size: 13, weight: .bold))
+                .tracking(0.7)
+
+            Divider().overlay(.white.opacity(0.08))
+
+            Text("SELECTED CLIP")
+                .font(.system(size: 9, weight: .bold))
+                .tracking(1)
+                .foregroundStyle(.white.opacity(0.4))
+
+            Text(selectedTrack)
+                .font(.system(size: 13, weight: .medium))
+
+            if selectedTool == "Speed" {
+                Text("Playback speed")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.6))
+
+                Text("\(zoom.formatted(.number.precision(.fractionLength(1))))×")
+                    .font(.system(size: 20, weight: .semibold))
+
+                Slider(value: $zoom, in: 0.25...3, step: 0.25)
+                    .tint(accent)
+            } else {
+                Text("Position")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.5))
+
+                HStack {
+                    Text("00:00")
+                    Spacer()
+                    Text("00:10")
+                }
+                .font(.system(size: 11, design: .monospaced))
+
+                Text("Clip settings")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.5))
+
+                Button {
+                    selectedTool = "Effects"
+                } label: {
+                    Label("Add effect", systemImage: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(10)
+                        .background(panel)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(panel.opacity(0.5))
+    }
+
+    private var timeline: some View {
+        VStack(spacing: 10) {
             HStack {
                 Text("TIMELINE")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1.5)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1)
 
                 Spacer()
 
@@ -224,215 +254,60 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
 
+                Slider(value: $zoom, in: 0.5...2)
+                    .tint(accent)
+                    .frame(width: 85)
+
                 Button {
                     playhead = min(1, playhead + 0.05)
                 } label: {
                     Image(systemName: "plus.magnifyingglass")
                 }
                 .buttonStyle(.plain)
-
-                Image(systemName: "slider.horizontal.3")
             }
-            .font(.system(size: 12))
-            .foregroundStyle(.white.opacity(0.7))
 
-            HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    trackLabel("VIDEO 1", icon: "film")
-                    trackLabel("VIDEO 2", icon: "square.stack")
-                    trackLabel("AUDIO 1", icon: "waveform")
-                    trackLabel("TEXT", icon: "textformat")
-                }
-                .frame(width: 78)
+            GeometryReader { geometry in
+                ZStack(alignment: .topLeading) {
+                    VStack(spacing: 3) {
+                        ForEach([
+                            ("Main Video", "film", Color.blue),
+                            ("Overlay", "square.on.square", Color.purple),
+                            ("Audio", "waveform", Color.green),
+                            ("Title", "textformat", Color.orange)
+                        ], id: \.0) { track in
+                            HStack(spacing: 8) {
+                                Text(track.0)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.65))
+                                    .frame(width: 76, alignment: .leading)
 
-                GeometryReader { geometry in
-                    let width = max(geometry.size.width, 420)
-
-                    VStack(spacing: 6) {
-                        HStack {
-                            ForEach(
-                                ["00:00", "00:05", "00:10", "00:15", "00:20"],
-                                id: \.self
-                            ) { time in
-                                Text(time)
-                                    .font(.system(size: 9, design: .monospaced))
-                                    .foregroundStyle(.white.opacity(0.4))
-                                Spacer(minLength: 0)
+                                Button {
+                                    selectedTrack = track.0
+                                } label: {
+                                    TimelineClipView(
+                                        title: track.0,
+                                        color: track.2,
+                                        isSelected: selectedTrack == track.0
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
-                        }
-                        .frame(height: 15)
-
-                        timelineClip(
-                            title: "Main Video",
-                            color: accent,
-                            width: width * 0.65,
-                            selected: selectedClip == "Main Video"
-                        )
-                        .onTapGesture {
-                            selectedClip = "Main Video"
-                        }
-
-                        timelineClip(
-                            title: "Overlay",
-                            color: .purple,
-                            width: width * 0.36,
-                            selected: selectedClip == "Overlay"
-                        )
-                        .onTapGesture {
-                            selectedClip = "Overlay"
-                        }
-
-                        timelineClip(
-                            title: "Audio Track",
-                            color: .green,
-                            width: width * 0.82,
-                            selected: selectedClip == "Audio Track"
-                        )
-                        .onTapGesture {
-                            selectedClip = "Audio Track"
-                        }
-
-                        timelineClip(
-                            title: "Title",
-                            color: .orange,
-                            width: width * 0.27,
-                            selected: selectedClip == "Title"
-                        )
-                        .onTapGesture {
-                            selectedClip = "Title"
+                            .frame(height: 42)
                         }
                     }
-                    .overlay(alignment: .topLeading) {
-                        Rectangle()
-                            .fill(.white)
-                            .frame(width: 1.5)
-                            .frame(maxHeight: .infinity)
-                            .offset(x: width * playhead, y: 12)
-                            .allowsHitTesting(false)
-                    }
+
+                    Rectangle()
+                        .fill(accent)
+                        .frame(width: 2)
+                        .offset(x: 86 + (geometry.size.width - 90) * playhead)
+                        .allowsHitTesting(false)
                 }
-                .frame(minWidth: 420)
             }
-            .frame(height: 126)
+            .frame(height: 177)
             .clipped()
-
-            HStack {
-                Label(selectedTool, systemImage: "cursorarrow")
-                Spacer()
-                Text("Selected: \(selectedClip)")
-                    .lineLimit(1)
-            }
-            .font(.system(size: 10))
-            .foregroundStyle(.white.opacity(0.45))
         }
-        .padding(14)
-        .background(panel, in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    private func trackLabel(_ title: String, icon: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 10))
-            Text(title)
-                .font(.system(size: 8, weight: .bold))
-                .lineLimit(1)
-        }
-        .foregroundStyle(.white.opacity(0.55))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 27)
-    }
-
-    private func timelineClip(
-        title: String,
-        color: Color,
-        width: CGFloat,
-        selected: Bool
-    ) -> some View {
-        HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color)
-                .frame(width: 3)
-
-            Text(title)
-                .font(.system(size: 9, weight: .semibold))
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 6)
-        .frame(width: max(width, 65), height: 25, alignment: .leading)
-        .background(color.opacity(0.18))
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-        .overlay {
-            RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(
-                    selected ? color : color.opacity(0.35),
-                    lineWidth: selected ? 1.5 : 0.5
-                )
-        }
-    }
-
-    private var inspector: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("INSPECTOR")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundStyle(.white.opacity(0.45))
-
-            Text(selectedClip)
-                .font(.system(size: 14, weight: .semibold))
-                .lineLimit(2)
-
-            Divider().overlay(.white.opacity(0.1))
-
-            Text("TRANSFORM")
-                .font(.system(size: 9, weight: .bold))
-                .tracking(1)
-                .foregroundStyle(.white.opacity(0.45))
-
-            inspectorValue("Position", value: "0, 0")
-            inspectorValue("Scale", value: "100%")
-            inspectorValue("Rotation", value: "0°")
-
-            Divider().overlay(.white.opacity(0.1))
-
-            Text("OPACITY")
-                .font(.system(size: 9, weight: .bold))
-                .tracking(1)
-                .foregroundStyle(.white.opacity(0.45))
-
-            Slider(value: .constant(1))
-                .tint(accent)
-
-            Spacer(minLength: 0)
-
-            Button {
-                selectedTool = "Effects"
-            } label: {
-                Label("Add Effect", systemImage: "plus")
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(
-                        .white.opacity(0.07),
-                        in: RoundedRectangle(cornerRadius: 6)
-                    )
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(14)
-        .frame(width: 190)
-        .background(panel.opacity(0.7))
-    }
-
-    private func inspectorValue(_ title: String, value: String) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(.white.opacity(0.55))
-            Spacer(minLength: 4)
-            Text(value)
-                .monospacedDigit()
-        }
-        .font(.system(size: 10))
+        .padding(12)
+        .frame(height: 235)
+        .background(panel)
     }
 }
