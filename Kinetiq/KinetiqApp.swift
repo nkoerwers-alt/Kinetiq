@@ -5,7 +5,7 @@ import SwiftUI
 struct KinetiqApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ProjectHomeView()
                 .preferredColorScheme(.dark)
         }
     }
