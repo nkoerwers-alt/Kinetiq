@@ -13,6 +13,10 @@ struct ContentView: View {
     @State private var previewURL: URL?
     @State private var errorMessage: String?
     @State private var showTrimmer = false
+    @State private var showExport = false
+    @State private var exportSourceURL: URL?
+    @State private var exportStartTime: Double = 0
+    @State private var exportDuration: Double?
 
     private let background = Color(red: 0.035, green: 0.035, blue: 0.045)
     private let panel = Color(red: 0.075, green: 0.075, blue: 0.09)
@@ -91,7 +95,6 @@ struct ContentView: View {
                         .font(.system(size: 30))
 
                     Text("Select a video clip first.")
-                        .font(.system(size: 14))
 
                     Button("Close") {
                         showTrimmer = false
@@ -100,6 +103,31 @@ struct ContentView: View {
                 .padding(30)
                 .presentationDetents([.medium])
             }
+        }
+        .sheet(isPresented: $showExport) {
+            if let exportSourceURL {
+                ExportView(
+                    sourceURL: exportSourceURL,
+                    startTime: exportStartTime,
+                    duration: exportDuration
+                )
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "film")
+                        .font(.system(size: 30))
+
+                    Text("Import or select a video before exporting.")
+
+                    Button("Close") {
+                        showExport = false
+                    }
+                }
+                .padding(30)
+                .presentationDetents([.medium])
+            }
+        }
+        .onChange(of: project) { _, _ in
+            saveProject()
         }
     }
 
@@ -134,6 +162,15 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
 
+            Button(action: prepareExport) {
+                Image(systemName: "square.and.arrow.up")
+                    .frame(width: 34, height: 34)
+                    .background(panel)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Export video")
+
             Button(action: saveProject) {
                 Image(systemName: "square.and.arrow.down")
                     .frame(width: 34, height: 34)
@@ -141,6 +178,7 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Save project")
         }
         .padding(12)
     }
@@ -255,8 +293,7 @@ struct ContentView: View {
             Divider().overlay(.white.opacity(0.08))
 
             if selectedTool != "Media" {
-                inspector
-                    .frame(width: 220)
+                inspector.frame(width: 220)
             }
         }
     }
@@ -421,6 +458,25 @@ struct ContentView: View {
         .padding(12)
         .frame(height: 205)
         .background(panel)
+    }
+
+    private func prepareExport() {
+        if let clip = selectedClip, let url = selectedClipURL {
+            exportSourceURL = url
+            exportStartTime = clip.startTime
+            exportDuration = clip.duration
+            showExport = true
+        } else if let previewURL,
+                  ["mp4", "mov", "m4v"].contains(
+                    previewURL.pathExtension.lowercased()
+                  ) {
+            exportSourceURL = previewURL
+            exportStartTime = 0
+            exportDuration = nil
+            showExport = true
+        } else {
+            errorMessage = "Import or select a video before exporting."
+        }
     }
 
     private func color(for track: EditorClip.ClipTrack) -> Color {
