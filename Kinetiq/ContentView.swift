@@ -7,10 +7,12 @@ struct ContentView: View {
     @State private var isPlaying = false
     @State private var selectedTool = "Select"
     @State private var selectedTrack = "Main Video"
+    @State private var selectedClipID: UUID?
     @State private var playhead: Double = 0.25
     @State private var speed: Double = 1
     @State private var previewURL: URL?
     @State private var errorMessage: String?
+    @State private var showTrimmer = false
 
     private let background = Color(red: 0.035, green: 0.035, blue: 0.045)
     private let panel = Color(red: 0.075, green: 0.075, blue: 0.09)
@@ -25,6 +27,18 @@ struct ContentView: View {
         ("Speed", "speedometer"),
         ("Media", "photo.on.rectangle")
     ]
+
+    private var selectedClip: EditorClip? {
+        project.clips.first { $0.id == selectedClipID }
+    }
+
+    private var selectedClipURL: URL? {
+        guard let clip = selectedClip else { return nil }
+
+        return try? MediaStorage.savedFiles().first {
+            $0.lastPathComponent == clip.mediaFilename
+        }
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -59,8 +73,33 @@ struct ContentView: View {
         } message: {
             Text(errorMessage ?? "")
         }
-        .onChange(of: project) { _, _ in
-            saveProject()
+        .sheet(isPresented: $showTrimmer) {
+            if let url = selectedClipURL, let clip = selectedClip {
+                ClipTrimmerView(url: url) { start, duration in
+                    applyTrim(
+                        clipID: clip.id,
+                        start: start,
+                        duration: duration
+                    )
+                    showTrimmer = false
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "film")
+                        .font(.system(size: 30))
+
+                    Text("Select a video clip first.")
+                        .font(.system(size: 14))
+
+                    Button("Close") {
+                        showTrimmer = false
+                    }
+                }
+                .padding(30)
+                .presentationDetents([.medium])
+            }
         }
     }
 
@@ -95,9 +134,7 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
 
-            Button {
-                saveProject()
-            } label: {
+            Button(action: saveProject) {
                 Image(systemName: "square.and.arrow.down")
                     .frame(width: 34, height: 34)
                     .background(panel)
@@ -111,7 +148,9 @@ struct ContentView: View {
     private var videoPreview: some View {
         Group {
             if let previewURL,
-               ["mp4", "mov", "m4v"].contains(previewURL.pathExtension.lowercased()) {
+               ["mp4", "mov", "m4v"].contains(
+                    previewURL.pathExtension.lowercased()
+               ) {
                 VideoPreview(url: previewURL)
             } else {
                 PreviewPlaceholder(isPlaying: isPlaying)
@@ -133,15 +172,20 @@ struct ContentView: View {
                         } label: {
                             VStack(spacing: 5) {
                                 Image(systemName: tool.1)
+
                                 Text(tool.0)
                                     .font(.system(size: 10))
                             }
                             .foregroundStyle(
-                                selectedTool == tool.0 ? accent : .white.opacity(0.65)
+                                selectedTool == tool.0
+                                    ? accent
+                                    : .white.opacity(0.65)
                             )
                             .frame(width: 60, height: 54)
                             .background(
-                                selectedTool == tool.0 ? accent.opacity(0.12) : panel
+                                selectedTool == tool.0
+                                    ? accent.opacity(0.12)
+                                    : panel
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 7))
                         }
@@ -153,7 +197,10 @@ struct ContentView: View {
 
             if selectedTool == "Media" {
                 ScrollView {
-                    MediaLibraryView(project: $project, previewURL: $previewURL)
+                    MediaLibraryView(
+                        project: $project,
+                        previewURL: $previewURL
+                    )
                 }
             } else {
                 inspector
@@ -175,6 +222,7 @@ struct ContentView: View {
                         selectedTool = tool.0
                     }
                 }
+
                 Spacer()
             }
             .frame(width: 82)
@@ -192,7 +240,10 @@ struct ContentView: View {
 
                 if selectedTool == "Media" {
                     ScrollView {
-                        MediaLibraryView(project: $project, previewURL: $previewURL)
+                        MediaLibraryView(
+                            project: $project,
+                            previewURL: $previewURL
+                        )
                     }
                 }
 
@@ -204,7 +255,8 @@ struct ContentView: View {
             Divider().overlay(.white.opacity(0.08))
 
             if selectedTool != "Media" {
-                inspector.frame(width: 220)
+                inspector
+                    .frame(width: 220)
             }
         }
     }
@@ -222,10 +274,38 @@ struct ContentView: View {
                 .tracking(1)
                 .foregroundStyle(.white.opacity(0.4))
 
-            Text(selectedTrack)
+            Text(selectedClip?.displayName ?? selectedTrack)
                 .font(.system(size: 13, weight: .medium))
+                .lineLimit(2)
 
-            if selectedTool == "Speed" {
+            if let clip = selectedClip {
+                Text("Start: \(timeString(clip.startTime))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.65))
+
+                Text("Duration: \(timeString(clip.duration))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+
+            if selectedTool == "Cut" {
+                Button {
+                    guard selectedClip != nil else {
+                        errorMessage = "Select a timeline clip first."
+                        return
+                    }
+
+                    showTrimmer = true
+                } label: {
+                    Label("Trim Clip", systemImage: "scissors")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(10)
+                        .background(accent.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+            } else if selectedTool == "Speed" {
                 Text("\(speed.formatted(.number.precision(.fractionLength(2))))×")
                     .font(.system(size: 20, weight: .semibold))
 
@@ -239,9 +319,7 @@ struct ContentView: View {
                 Text(project.name)
                     .font(.system(size: 12))
 
-                Button {
-                    saveProject()
-                } label: {
+                Button(action: saveProject) {
                     Label("Save project", systemImage: "checkmark")
                         .font(.system(size: 12, weight: .medium))
                         .frame(maxWidth: .infinity)
@@ -289,22 +367,25 @@ struct ContentView: View {
                                     .frame(width: 76, alignment: .leading)
 
                                 HStack(spacing: 4) {
-                                    ForEach(project.clips.filter { $0.track == track }) { clip in
+                                    ForEach(
+                                        project.clips.filter { $0.track == track }
+                                    ) { clip in
                                         Button {
+                                            selectedClipID = clip.id
                                             selectedTrack = clip.displayName
 
-                                            let fileURL = try? MediaStorage.savedFiles().first {
-                                                $0.lastPathComponent == clip.mediaFilename
-                                            }
-
-                                            if let fileURL {
-                                                previewURL = fileURL
+                                            if let url = try? MediaStorage.savedFiles().first(
+                                                where: {
+                                                    $0.lastPathComponent == clip.mediaFilename
+                                                }
+                                            ) {
+                                                previewURL = url
                                             }
                                         } label: {
                                             TimelineClipView(
                                                 title: clip.displayName,
                                                 color: color(for: track),
-                                                isSelected: selectedTrack == clip.displayName
+                                                isSelected: selectedClipID == clip.id
                                             )
                                             .frame(
                                                 width: max(70, clip.duration * 18),
@@ -328,7 +409,9 @@ struct ContentView: View {
                     Rectangle()
                         .fill(accent)
                         .frame(width: 2)
-                        .offset(x: 86 + (geometry.size.width - 90) * playhead)
+                        .offset(
+                            x: 86 + (geometry.size.width - 90) * playhead
+                        )
                         .allowsHitTesting(false)
                 }
             }
@@ -349,9 +432,39 @@ struct ContentView: View {
         }
     }
 
-    private func saveProject() {
+    private func applyTrim(
+        clipID: UUID,
+        start: Double,
+        duration: Double
+    ) {
+        guard let index = project.clips.firstIndex(where: { $0.id == clipID }) else {
+            return
+        }
+
+        project.clips[index].startTime = start
+        project.clips[index].duration = duration
+        project.modifiedAt = Date()
+
         do {
-            project.modifiedAt = Date()
+            try ProjectStorage.save(project)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func timeString(_ seconds: Double) -> String {
+        let totalSeconds = max(0, Int(seconds))
+        return String(
+            format: "%02d:%02d",
+            totalSeconds / 60,
+            totalSeconds % 60
+        )
+    }
+
+    private func saveProject() {
+        project.modifiedAt = Date()
+
+        do {
             try ProjectStorage.save(project)
         } catch {
             errorMessage = error.localizedDescription
