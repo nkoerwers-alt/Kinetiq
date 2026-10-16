@@ -10,7 +10,7 @@ struct ImportedMedia: Identifiable {
     let name: String
     let type: MediaType
 
-    enum MediaType {
+    enum MediaType: String {
         case video
         case audio
         case image
@@ -46,7 +46,9 @@ struct MediaImporter: View {
                 ContentUnavailableView(
                     "No media yet",
                     systemImage: "film",
-                    description: Text("Import video, audio or images from Files.")
+                    description: Text(
+                        "Import video, audio or images from Files."
+                    )
                 )
                 .frame(maxWidth: .infinity)
             } else {
@@ -58,7 +60,9 @@ struct MediaImporter: View {
                             Image(systemName: icon(for: media.type))
                                 .frame(width: 34, height: 34)
                                 .background(.white.opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .clipShape(
+                                    RoundedRectangle(cornerRadius: 6)
+                                )
 
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(media.name)
@@ -98,7 +102,9 @@ struct MediaImporter: View {
             switch result {
             case .success(let urls):
                 for url in urls {
-                    let hasAccess = url.startAccessingSecurityScopedResource()
+                    let hasAccess =
+                        url.startAccessingSecurityScopedResource()
+
                     defer {
                         if hasAccess {
                             url.stopAccessingSecurityScopedResource()
@@ -107,7 +113,9 @@ struct MediaImporter: View {
 
                     let mediaType: ImportedMedia.MediaType
 
-                    if let type = UTType(filenameExtension: url.pathExtension) {
+                    if let type = UTType(
+                        filenameExtension: url.pathExtension
+                    ) {
                         if type.conforms(to: .audio) {
                             mediaType = .audio
                         } else if type.conforms(to: .image) {
@@ -137,9 +145,12 @@ struct MediaImporter: View {
 
     private func icon(for type: ImportedMedia.MediaType) -> String {
         switch type {
-        case .video: return "film"
-        case .audio: return "waveform"
-        case .image: return "photo"
+        case .video:
+            return "film"
+        case .audio:
+            return "waveform"
+        case .image:
+            return "photo"
         }
     }
 }
