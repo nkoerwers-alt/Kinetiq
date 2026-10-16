@@ -2,11 +2,14 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State var project: EditorProject
+
     @State private var isPlaying = false
     @State private var selectedTool = "Select"
     @State private var selectedTrack = "Main Video"
     @State private var playhead: Double = 0.25
-    @State private var zoom: Double = 1
+    @State private var speed: Double = 1
+    @State private var errorMessage: String?
 
     private let background = Color(red: 0.035, green: 0.035, blue: 0.045)
     private let panel = Color(red: 0.075, green: 0.075, blue: 0.09)
@@ -28,7 +31,6 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 header
-
                 Divider().overlay(.white.opacity(0.08))
 
                 if compact {
@@ -45,21 +47,36 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .preferredColorScheme(.dark)
+        .alert(
+            "Project Error",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
+        .onChange(of: project) { _, _ in
+            saveProject()
+        }
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Image(systemName: "square.stack.3d.up.fill")
-                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(accent)
 
-            Text("KINETIQ")
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .tracking(2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("KINETIQ")
+                    .font(.system(size: 15, weight: .bold))
+                    .tracking(2)
 
-            Text("EDITOR")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.4))
+                Text(project.name)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
 
             Spacer()
 
@@ -70,29 +87,28 @@ struct ContentView: View {
                     isPlaying ? "Pause" : "Preview",
                     systemImage: isPlaying ? "pause.fill" : "play.fill"
                 )
-                .font(.system(size: 12, weight: .semibold))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
+                .font(.system(size: 11, weight: .semibold))
+                .padding(10)
                 .background(accent.opacity(0.2))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
 
-            Button {} label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(width: 36, height: 36)
+            Button {
+                saveProject()
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+                    .frame(width: 34, height: 34)
                     .background(panel)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(12)
     }
 
     private var compactEditor: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             PreviewPlaceholder(isPlaying: isPlaying)
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
@@ -103,7 +119,7 @@ struct ContentView: View {
                         Button {
                             selectedTool = tool.0
                         } label: {
-                            VStack(spacing: 6) {
+                            VStack(spacing: 5) {
                                 Image(systemName: tool.1)
                                 Text(tool.0)
                                     .font(.system(size: 10))
@@ -111,10 +127,9 @@ struct ContentView: View {
                             .foregroundStyle(
                                 selectedTool == tool.0 ? accent : .white.opacity(0.65)
                             )
-                            .frame(width: 62, height: 58)
+                            .frame(width: 60, height: 54)
                             .background(
-                                selectedTool == tool.0
-                                    ? accent.opacity(0.12) : panel
+                                selectedTool == tool.0 ? accent.opacity(0.12) : panel
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 7))
                         }
@@ -141,7 +156,6 @@ struct ContentView: View {
                         selectedTool = tool.0
                     }
                 }
-
                 Spacer()
             }
             .frame(width: 82)
@@ -153,31 +167,21 @@ struct ContentView: View {
                 PreviewPlaceholder(isPlaying: isPlaying)
                     .frame(maxWidth: 760)
 
-                HStack {
-                    Text("00:\(String(format: "%02d", Int(playhead * 60)))")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.65))
-
-                    Spacer()
-
-                    Text("16:9  •  1080p")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-                .frame(maxWidth: 760)
+                Text(project.clips.isEmpty ? "No clips on the timeline" : "\(project.clips.count) timeline clips")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.45))
             }
             .padding(16)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Divider().overlay(.white.opacity(0.08))
 
-            inspector
-                .frame(width: 220)
+            inspector.frame(width: 220)
         }
     }
 
     private var inspector: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Text(selectedTool == "Select" ? "Inspector" : selectedTool.uppercased())
                 .font(.system(size: 13, weight: .bold))
                 .tracking(0.7)
@@ -193,35 +197,23 @@ struct ContentView: View {
                 .font(.system(size: 13, weight: .medium))
 
             if selectedTool == "Speed" {
-                Text("Playback speed")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.6))
-
-                Text("\(zoom.formatted(.number.precision(.fractionLength(1))))×")
+                Text("\(speed.formatted(.number.precision(.fractionLength(2))))×")
                     .font(.system(size: 20, weight: .semibold))
 
-                Slider(value: $zoom, in: 0.25...3, step: 0.25)
+                Slider(value: $speed, in: 0.25...3, step: 0.25)
                     .tint(accent)
             } else {
-                Text("Position")
+                Text("Project")
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.5))
 
-                HStack {
-                    Text("00:00")
-                    Spacer()
-                    Text("00:10")
-                }
-                .font(.system(size: 11, design: .monospaced))
-
-                Text("Clip settings")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.5))
+                Text(project.name)
+                    .font(.system(size: 12))
 
                 Button {
-                    selectedTool = "Effects"
+                    saveProject()
                 } label: {
-                    Label("Add effect", systemImage: "plus")
+                    Label("Save project", systemImage: "checkmark")
                         .font(.system(size: 12, weight: .medium))
                         .frame(maxWidth: .infinity)
                         .padding(10)
@@ -239,7 +231,7 @@ struct ContentView: View {
     }
 
     private var timeline: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             HStack {
                 Text("TIMELINE")
                     .font(.system(size: 11, weight: .bold))
@@ -247,21 +239,14 @@ struct ContentView: View {
 
                 Spacer()
 
-                Button {
-                    playhead = max(0, playhead - 0.05)
-                } label: {
-                    Image(systemName: "minus.magnifyingglass")
-                }
-                .buttonStyle(.plain)
-
-                Slider(value: $zoom, in: 0.5...2)
-                    .tint(accent)
-                    .frame(width: 85)
+                Text("\(project.clips.count) clips")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.45))
 
                 Button {
-                    playhead = min(1, playhead + 0.05)
+                    saveProject()
                 } label: {
-                    Image(systemName: "plus.magnifyingglass")
+                    Image(systemName: "square.and.arrow.down")
                 }
                 .buttonStyle(.plain)
             }
@@ -269,30 +254,41 @@ struct ContentView: View {
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
                     VStack(spacing: 3) {
-                        ForEach([
-                            ("Main Video", "film", Color.blue),
-                            ("Overlay", "square.on.square", Color.purple),
-                            ("Audio", "waveform", Color.green),
-                            ("Title", "textformat", Color.orange)
-                        ], id: \.0) { track in
+                        ForEach(EditorClip.ClipTrack.allCases, id: \.self) { track in
                             HStack(spacing: 8) {
-                                Text(track.0)
-                                    .font(.system(size: 10, weight: .medium))
+                                Text(track.rawValue.capitalized)
+                                    .font(.system(size: 10))
                                     .foregroundStyle(.white.opacity(0.65))
                                     .frame(width: 76, alignment: .leading)
 
-                                Button {
-                                    selectedTrack = track.0
-                                } label: {
-                                    TimelineClipView(
-                                        title: track.0,
-                                        color: track.2,
-                                        isSelected: selectedTrack == track.0
-                                    )
+                                HStack(spacing: 4) {
+                                    ForEach(
+                                        project.clips.filter { $0.track == track }
+                                    ) { clip in
+                                        Button {
+                                            selectedTrack = clip.displayName
+                                        } label: {
+                                            TimelineClipView(
+                                                title: clip.displayName,
+                                                color: color(for: track),
+                                                isSelected: selectedTrack == clip.displayName
+                                            )
+                                            .frame(
+                                                width: max(70, clip.duration * 18),
+                                                height: 34
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+
+                                    if project.clips.filter({ $0.track == track }).isEmpty {
+                                        Rectangle()
+                                            .fill(.white.opacity(0.04))
+                                            .frame(height: 34)
+                                    }
                                 }
-                                .buttonStyle(.plain)
                             }
-                            .frame(height: 42)
+                            .frame(height: 38)
                         }
                     }
 
@@ -303,11 +299,29 @@ struct ContentView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .frame(height: 177)
+            .frame(height: 155)
             .clipped()
         }
         .padding(12)
-        .frame(height: 235)
+        .frame(height: 205)
         .background(panel)
+    }
+
+    private func color(for track: EditorClip.ClipTrack) -> Color {
+        switch track {
+        case .video: return .blue
+        case .overlay: return .purple
+        case .audio: return .green
+        case .title: return .orange
+        }
+    }
+
+    private func saveProject() {
+        do {
+            project.modifiedAt = Date()
+            try ProjectStorage.save(project)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
