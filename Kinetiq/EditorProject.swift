@@ -18,7 +18,7 @@ struct EditorClip: Identifiable, Codable, Hashable {
     }
 }
 
-struct EditorProject: Codable, Identifiable {
+struct EditorProject: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String
     var createdAt: Date = Date()
