@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct MediaLibraryView: View {
     @Binding var project: EditorProject
+    @Binding var previewURL: URL?
 
     @State private var mediaFiles: [URL] = []
     @State private var showImporter = false
@@ -31,7 +32,7 @@ struct MediaLibraryView: View {
                 ContentUnavailableView(
                     "No Media",
                     systemImage: "film",
-                    description: Text("Import files to add clips to your project.")
+                    description: Text("Import files from the Files app.")
                 )
             } else {
                 ForEach(mediaFiles, id: \.absoluteString) { url in
@@ -49,6 +50,13 @@ struct MediaLibraryView: View {
                             addClip(url)
                         } label: {
                             Image(systemName: "plus.circle.fill")
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            previewURL = url
+                        } label: {
+                            Image(systemName: "play.circle")
                         }
                         .buttonStyle(.plain)
                     }
@@ -103,6 +111,10 @@ struct MediaLibraryView: View {
                 if !mediaFiles.contains(savedURL) {
                     mediaFiles.append(savedURL)
                 }
+
+                if previewURL == nil {
+                    previewURL = savedURL
+                }
             } catch {
                 errorMessage = "Could not import \(url.lastPathComponent): \(error.localizedDescription)"
             }
@@ -121,6 +133,7 @@ struct MediaLibraryView: View {
         )
 
         project.addClip(clip)
+        previewURL = url
 
         do {
             try ProjectStorage.save(project)
