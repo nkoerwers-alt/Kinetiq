@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var selectedTrack = "Main Video"
     @State private var playhead: Double = 0.25
     @State private var speed: Double = 1
+    @State private var previewURL: URL?
     @State private var errorMessage: String?
 
     private let background = Color(red: 0.035, green: 0.035, blue: 0.045)
@@ -31,7 +32,6 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 header
-
                 Divider().overlay(.white.opacity(0.08))
 
                 if compact {
@@ -41,7 +41,6 @@ struct ContentView: View {
                 }
 
                 Divider().overlay(.white.opacity(0.08))
-
                 timeline
             }
             .background(background)
@@ -109,9 +108,20 @@ struct ContentView: View {
         .padding(12)
     }
 
+    private var videoPreview: some View {
+        Group {
+            if let previewURL,
+               ["mp4", "mov", "m4v"].contains(previewURL.pathExtension.lowercased()) {
+                VideoPreview(url: previewURL)
+            } else {
+                PreviewPlaceholder(isPlaying: isPlaying)
+            }
+        }
+    }
+
     private var compactEditor: some View {
         VStack(spacing: 10) {
-            PreviewPlaceholder(isPlaying: isPlaying)
+            videoPreview
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
 
@@ -123,20 +133,15 @@ struct ContentView: View {
                         } label: {
                             VStack(spacing: 5) {
                                 Image(systemName: tool.1)
-
                                 Text(tool.0)
                                     .font(.system(size: 10))
                             }
                             .foregroundStyle(
-                                selectedTool == tool.0
-                                    ? accent
-                                    : .white.opacity(0.65)
+                                selectedTool == tool.0 ? accent : .white.opacity(0.65)
                             )
                             .frame(width: 60, height: 54)
                             .background(
-                                selectedTool == tool.0
-                                    ? accent.opacity(0.12)
-                                    : panel
+                                selectedTool == tool.0 ? accent.opacity(0.12) : panel
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 7))
                         }
@@ -147,7 +152,9 @@ struct ContentView: View {
             }
 
             if selectedTool == "Media" {
-                MediaLibraryView(project: $project)
+                ScrollView {
+                    MediaLibraryView(project: $project, previewURL: $previewURL)
+                }
             } else {
                 inspector
             }
@@ -168,7 +175,6 @@ struct ContentView: View {
                         selectedTool = tool.0
                     }
                 }
-
                 Spacer()
             }
             .frame(width: 82)
@@ -177,20 +183,16 @@ struct ContentView: View {
             Divider().overlay(.white.opacity(0.08))
 
             VStack(spacing: 12) {
-                PreviewPlaceholder(isPlaying: isPlaying)
+                videoPreview
                     .frame(maxWidth: 760)
 
-                Text(
-                    project.clips.isEmpty
-                        ? "No clips on the timeline"
-                        : "\(project.clips.count) timeline clips"
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.45))
+                Text("\(project.clips.count) timeline clips")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.45))
 
                 if selectedTool == "Media" {
                     ScrollView {
-                        MediaLibraryView(project: $project)
+                        MediaLibraryView(project: $project, previewURL: $previewURL)
                     }
                 }
 
@@ -202,21 +204,16 @@ struct ContentView: View {
             Divider().overlay(.white.opacity(0.08))
 
             if selectedTool != "Media" {
-                inspector
-                    .frame(width: 220)
+                inspector.frame(width: 220)
             }
         }
     }
 
     private var inspector: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(
-                selectedTool == "Select"
-                    ? "Inspector"
-                    : selectedTool.uppercased()
-            )
-            .font(.system(size: 13, weight: .bold))
-            .tracking(0.7)
+            Text(selectedTool == "Select" ? "Inspector" : selectedTool.uppercased())
+                .font(.system(size: 13, weight: .bold))
+                .tracking(0.7)
 
             Divider().overlay(.white.opacity(0.08))
 
@@ -229,10 +226,8 @@ struct ContentView: View {
                 .font(.system(size: 13, weight: .medium))
 
             if selectedTool == "Speed" {
-                Text(
-                    "\(speed.formatted(.number.precision(.fractionLength(2))))×"
-                )
-                .font(.system(size: 20, weight: .semibold))
+                Text("\(speed.formatted(.number.precision(.fractionLength(2))))×")
+                    .font(.system(size: 20, weight: .semibold))
 
                 Slider(value: $speed, in: 0.25...3, step: 0.25)
                     .tint(accent)
@@ -277,9 +272,7 @@ struct ContentView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.45))
 
-                Button {
-                    saveProject()
-                } label: {
+                Button(action: saveProject) {
                     Image(systemName: "square.and.arrow.down")
                 }
                 .buttonStyle(.plain)
@@ -288,10 +281,7 @@ struct ContentView: View {
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
                     VStack(spacing: 3) {
-                        ForEach(
-                            EditorClip.ClipTrack.allCases,
-                            id: \.self
-                        ) { track in
+                        ForEach(EditorClip.ClipTrack.allCases, id: \.self) { track in
                             HStack(spacing: 8) {
                                 Text(track.rawValue.capitalized)
                                     .font(.system(size: 10))
@@ -299,34 +289,32 @@ struct ContentView: View {
                                     .frame(width: 76, alignment: .leading)
 
                                 HStack(spacing: 4) {
-                                    ForEach(
-                                        project.clips.filter {
-                                            $0.track == track
-                                        }
-                                    ) { clip in
+                                    ForEach(project.clips.filter { $0.track == track }) { clip in
                                         Button {
                                             selectedTrack = clip.displayName
+
+                                            let fileURL = try? MediaStorage.savedFiles().first {
+                                                $0.lastPathComponent == clip.mediaFilename
+                                            }
+
+                                            if let fileURL {
+                                                previewURL = fileURL
+                                            }
                                         } label: {
                                             TimelineClipView(
                                                 title: clip.displayName,
                                                 color: color(for: track),
-                                                isSelected:
-                                                    selectedTrack == clip.displayName
+                                                isSelected: selectedTrack == clip.displayName
                                             )
                                             .frame(
-                                                width: max(
-                                                    70,
-                                                    clip.duration * 18
-                                                ),
+                                                width: max(70, clip.duration * 18),
                                                 height: 34
                                             )
                                         }
                                         .buttonStyle(.plain)
                                     }
 
-                                    if project.clips.filter({
-                                        $0.track == track
-                                    }).isEmpty {
+                                    if project.clips.filter({ $0.track == track }).isEmpty {
                                         Rectangle()
                                             .fill(.white.opacity(0.04))
                                             .frame(height: 34)
@@ -340,9 +328,7 @@ struct ContentView: View {
                     Rectangle()
                         .fill(accent)
                         .frame(width: 2)
-                        .offset(
-                            x: 86 + (geometry.size.width - 90) * playhead
-                        )
+                        .offset(x: 86 + (geometry.size.width - 90) * playhead)
                         .allowsHitTesting(false)
                 }
             }
