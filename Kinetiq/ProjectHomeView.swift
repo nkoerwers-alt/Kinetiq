@@ -7,7 +7,7 @@ struct ProjectHomeView: View {
     var body: some View {
         Group {
             if let project = activeProject {
-                ContentView()
+                ContentView(project: project)
                     .onDisappear {
                         activeProject = nil
                     }
